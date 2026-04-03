@@ -640,8 +640,15 @@ async function callGemini(messages, mediaItems=[]){
   const historyParts=messages.slice(0,-1).map(m=>({role:m.role==='assistant'?'model':'user',parts:[{text:m.content}]}));
 
   const body={contents:[...historyParts,{role:'user',parts}],systemInstruction:{parts:[{text:systemPrompt}]},generationConfig:{maxOutputTokens:1500,temperature:.85}};
-  const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${S.geminiKey}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const d=await r.json();
+  // Try gemini-2.0-flash first, fallback to gemini-1.5-flash
+  const models=['gemini-2.0-flash','gemini-1.5-flash','gemini-1.5-flash-latest'];
+  let d=null;
+  for(const model of models){
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${S.geminiKey}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    d=await r.json();
+    if(!d.error){ log('Motor: '+model,'ok'); break; }
+    log('Modelo '+model+' no disponible, probando siguiente...','warn');
+  }
   if(d.error) throw new Error(d.error.message);
   return d.candidates[0].content.parts[0].text;
 }
