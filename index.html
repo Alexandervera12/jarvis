@@ -416,6 +416,7 @@ body::before{content:'';position:fixed;inset:0;z-index:1;background:repeating-li
         <div id="media-preview"></div>
         <div class="input-row">
           <button class="iact" id="micBtn" onclick="toggleMic()" title="Hablar">🎤</button>
+          <button class="iact" id="ttsToggle" onclick="toggleTTS()" title="Voz ON/OFF" style="font-size:.7rem;font-family:'Share Tech Mono',monospace;letter-spacing:0">VOZ<br>ON</button>
           <div id="voicewave">
             <div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div><div class="wb"></div>
           </div>
@@ -487,6 +488,7 @@ const S = {
   queryCount: 0,
   sessionStart: Date.now(),
   listening: false,
+  ttsEnabled: true,
   recognition: null,
   camStream: null,
   currentFreq: 30,
@@ -810,15 +812,103 @@ function escA(s){ return (s||'').replace(/`/g,"'").replace(/"/g,'&quot;').replac
 async function cpy(btn,text){ try{ await navigator.clipboard.writeText(text); btn.textContent='✓ Copiado'; setTimeout(()=>btn.textContent='⬡ Copiar',2000); }catch(e){} }
 
 // ── VOICE ──
+// ── TTS ENGINE ──
+// Uses Google Translate TTS (best free quality on Android Chrome)
+// Falls back to Web Speech API if blocked
+let ttsAudio = null;
+let ttsQueue = [];
+let ttsPlaying = false;
+
+function cleanText(text){
+  return text.replace(/[#*`\[\]>]/g,'').replace(/\n+/g,' ').replace(/\s+/g,' ').trim();
+}
+
 function speak(text){
-  if(!window.speechSynthesis) return;
+  if(!S.ttsEnabled) return;
+  text = cleanText(text).substring(0, 500);
+  if(!text) return;
+  // Split into sentences for more natural delivery
+  const sentences = text.match(/[^.!?]+[.!?]*/g) || [text];
+  ttsQueue = sentences.map(s => s.trim()).filter(s => s.length > 2);
+  ttsPlaying = false;
+  if(ttsAudio){ ttsAudio.pause(); ttsAudio = null; }
+  window.speechSynthesis && window.speechSynthesis.cancel();
+  playNextTTS();
+}
+
+function playNextTTS(){
+  if(ttsPlaying || !ttsQueue.length) return;
+  const sentence = ttsQueue.shift();
+  ttsPlaying = true;
+
+  // Try Google Translate TTS first (sounds much better)
+  const gttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(sentence)}&tl=es&client=tw-ob&ttsspeed=0.9`;
+  
+  const audio = new Audio();
+  audio.crossOrigin = 'anonymous';
+  
+  audio.onended = () => { ttsPlaying = false; playNextTTS(); };
+  audio.onerror = () => {
+    // Fallback to Web Speech API
+    ttsPlaying = false;
+    speakWebSpeech(sentence, playNextTTS);
+  };
+
+  // Try loading — if CORS blocks it, fallback kicks in
+  audio.src = gttsUrl;
+  audio.volume = 0.95;
+  
+  const playPromise = audio.play();
+  if(playPromise){
+    playPromise.catch(() => {
+      // Autoplay blocked or CORS — use Web Speech
+      ttsPlaying = false;
+      speakWebSpeech(sentence, playNextTTS);
+    });
+  }
+  ttsAudio = audio;
+}
+
+function toggleTTS(){
+  S.ttsEnabled = !S.ttsEnabled;
+  const btn = document.getElementById('ttsToggle');
+  if(S.ttsEnabled){
+    btn.innerHTML = 'VOZ<br>ON';
+    btn.style.color = '';
+    btn.style.borderColor = '';
+    log('Voz activada','ok');
+  } else {
+    btn.innerHTML = 'VOZ<br>OFF';
+    btn.style.color = 'var(--red)';
+    btn.style.borderColor = 'rgba(255,61,61,.3)';
+    if(ttsAudio){ ttsAudio.pause(); ttsAudio=null; }
+    window.speechSynthesis && window.speechSynthesis.cancel();
+    ttsQueue = [];
+    log('Voz desactivada','warn');
+  }
+}
+
+function speakWebSpeech(text, onEnd){
+  if(!window.speechSynthesis){ if(onEnd) onEnd(); return; }
   window.speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(text.replace(/[#*`\[\]]/g,'').substring(0,500));
-  u.lang='es-419'; u.rate=.95; u.pitch=.82;
-  // Prefer Latin American voice
-  const vs=speechSynthesis.getVoices();
-  const pref=vs.find(v=>v.lang==='es-419')||vs.find(v=>v.lang==='es-MX')||vs.find(v=>v.lang==='es-AR')||vs.find(v=>v.lang==='es-CO')||vs.find(v=>v.lang.startsWith('es'))||vs[0];
-  if(pref) u.voice=pref;
+  const u = new SpeechSynthesisUtterance(text);
+  // Best settings for Android Chrome Latin American voice
+  u.lang = 'es-US';  // es-US has better Google voice on Android than es-419
+  u.rate = 0.88;
+  u.pitch = 0.75;
+  u.volume = 1.0;
+  const vs = speechSynthesis.getVoices();
+  // Prefer Google voices (much better quality on Android)
+  const pref = 
+    vs.find(v => v.name.includes('Google') && v.lang.startsWith('es')) ||
+    vs.find(v => v.lang === 'es-US') ||
+    vs.find(v => v.lang === 'es-MX') ||
+    vs.find(v => v.lang === 'es-419') ||
+    vs.find(v => v.lang.startsWith('es')) ||
+    vs[0];
+  if(pref) u.voice = pref;
+  u.onend = () => { if(onEnd) onEnd(); };
+  u.onerror = () => { if(onEnd) onEnd(); };
   speechSynthesis.speak(u);
 }
 
