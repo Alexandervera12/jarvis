@@ -1,0 +1,28 @@
+{
+  "name": "JARVIS — Neural Assistant v2.0",
+  "short_name": "JARVIS",
+  "description": "Tu asistente de inteligencia artificial personal, estilo JARVIS. Voz, visión, memoria y tareas cíclicas.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020a12",
+  "theme_color": "#020a12",
+  "orientation": "any",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' fill='%23020a12'/><circle cx='256' cy='256' r='200' fill='none' stroke='%2300e5ff' stroke-width='12'/><circle cx='256' cy='256' r='150' fill='none' stroke='%2300e5ff' stroke-width='4' opacity='.5'/><text x='256' y='290' font-family='monospace' font-size='120' fill='%2300e5ff' text-anchor='middle'>J</text></svg>",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Chat con JARVIS",
+      "url": "/",
+      "description": "Abrir chat principal"
+    }
+  ]
+}
